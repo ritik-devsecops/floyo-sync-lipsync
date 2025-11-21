@@ -73,9 +73,11 @@ class SyncApiHandler:
 
     @staticmethod
     def create_generation(
-        video_url,
-        audio_url,
-        model,
+        video_path=None,
+        video_url=None,
+        audio_path=None,
+        audio_url=None,
+        model=None,
         sync_mode=None,
         temperature=None,
         active_speaker_detection=None,
@@ -88,13 +90,14 @@ class SyncApiHandler:
         """
         Submit lipsync generation request to Sync.so API.
         
-        Currently accepts URLs for video and audio as temporary solution
-        until Floyo file upload logic is implemented.
-        Downloads files from URLs and uploads them using multipart/form-data.
+        Accepts either file paths (for local files) or URLs (downloads and uploads).
+        Supports both VIDEO/AUDIO objects (extracted paths) and direct file paths/URLs.
 
         Args:
-            video_url: URL to the input video file
-            audio_url: URL to the input audio file
+            video_path: Path to local video file (optional, if video_url not provided)
+            video_url: URL to video file (optional, if video_path not provided)
+            audio_path: Path to local audio file (optional, if audio_url not provided)
+            audio_url: URL to audio file (optional, if audio_path not provided)
             model: Model to use (lipsync-2, lipsync-1.9.0-beta, lipsync-2-pro, etc.)
             sync_mode: How to handle mismatched video/audio duration (bounce, loop, cut_off, silence, remap)
             temperature: Temperature parameter (0.0-2.0)
@@ -113,6 +116,8 @@ class SyncApiHandler:
         """
         video_temp_path = None
         audio_temp_path = None
+        video_was_downloaded = False
+        audio_was_downloaded = False
         try:
             api_key = SyncConfig().get_key()
             url = f"{SyncApiHandler.BASE_URL}/generate"
@@ -121,12 +126,33 @@ class SyncApiHandler:
                 "x-api-key": api_key,
             }
 
-            # Download files from URLs to temporary files
-            print(f"Downloading video from URL...")
-            video_temp_path = SyncApiHandler._download_file_from_url(video_url, suffix=".mp4")
-            
-            print(f"Downloading audio from URL...")
-            audio_temp_path = SyncApiHandler._download_file_from_url(audio_url, suffix=".wav")
+            # Determine video source - prefer path over URL
+            if video_path and os.path.exists(video_path):
+                # Use local file directly
+                video_temp_path = video_path
+                video_was_downloaded = False
+                print(f"Using local video file: {video_path}")
+            elif video_url:
+                # Download from URL
+                print(f"Downloading video from URL...")
+                video_temp_path = SyncApiHandler._download_file_from_url(video_url, suffix=".mp4")
+                video_was_downloaded = True
+            else:
+                raise ValueError("Either video_path or video_url must be provided")
+
+            # Determine audio source - prefer path over URL
+            if audio_path and os.path.exists(audio_path):
+                # Use local file directly
+                audio_temp_path = audio_path
+                audio_was_downloaded = False
+                print(f"Using local audio file: {audio_path}")
+            elif audio_url:
+                # Download from URL
+                print(f"Downloading audio from URL...")
+                audio_temp_path = SyncApiHandler._download_file_from_url(audio_url, suffix=".wav")
+                audio_was_downloaded = True
+            else:
+                raise ValueError("Either audio_path or audio_url must be provided")
 
             # Detect file extensions and MIME types
             video_ext = os.path.splitext(video_temp_path)[1] or '.mp4'
@@ -176,8 +202,8 @@ class SyncApiHandler:
 
             print(f"Submitting lipsync generation request to Sync.so API...")
             print(f"Model: {model}")
-            print(f"Video URL: {video_url}")
-            print(f"Audio URL: {audio_url}")
+            print(f"Video: {video_temp_path} ({'URL' if video_was_downloaded else 'Local file'})")
+            print(f"Audio: {audio_temp_path} ({'URL' if audio_was_downloaded else 'Local file'})")
             if options:
                 print(f"Options: {json.dumps(options, indent=2)}")
 
@@ -212,14 +238,14 @@ class SyncApiHandler:
             print(error_msg)
             raise Exception(error_msg) from e
         finally:
-            # Clean up temporary files
-            if video_temp_path and os.path.exists(video_temp_path):
+            # Clean up temporary files (only if they were downloaded, not if they were local files)
+            if video_temp_path and video_was_downloaded and os.path.exists(video_temp_path):
                 try:
                     os.remove(video_temp_path)
                     print(f"Cleaned up temporary video file: {video_temp_path}")
                 except Exception as e:
                     print(f"Warning: Could not delete temporary video file {video_temp_path}: {str(e)}")
-            if audio_temp_path and os.path.exists(audio_temp_path):
+            if audio_temp_path and audio_was_downloaded and os.path.exists(audio_temp_path):
                 try:
                     os.remove(audio_temp_path)
                     print(f"Cleaned up temporary audio file: {audio_temp_path}")

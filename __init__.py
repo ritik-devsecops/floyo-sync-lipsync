@@ -6,8 +6,7 @@ Provides video lipsync capabilities via Sync.so API integration.
 from typing_extensions import override
 from comfy_api.latest import ComfyExtension, io
 
-from .sync_node import SyncLipsyncNode
-from .video_url_to_frames_node import VideoUrlToFramesNode
+from .nodes import SyncLipsyncNode, VideoUrlToFramesNode
 
 
 class FloyoSyncLipsyncExtension(ComfyExtension):

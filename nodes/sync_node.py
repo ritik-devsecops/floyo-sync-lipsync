@@ -3,10 +3,12 @@ Sync.so Lipsync Node for ComfyUI using ComfyExtension format.
 Provides video lipsync capabilities via Sync.so API.
 """
 
+import os
 from typing_extensions import override
 from comfy_api.latest import ComfyExtension, io
 
 from .sync_utils import SyncApiHandler
+from .file_utils import FileUtils
 
 
 class SyncLipsyncNode(io.ComfyNode):
@@ -38,16 +40,8 @@ class SyncLipsyncNode(io.ComfyNode):
             display_name="Sync.so Lipsync",
             category="Sync.so",
             inputs=[
-                io.String.Input(
-                    "video_url",
-                    default="",
-                    multiline=False,
-                ),
-                io.String.Input(
-                    "audio_url",
-                    default="",
-                    multiline=False,
-                ),
+                io.Video.Input("video"),
+                io.Audio.Input("audio"),
                 io.Combo.Input(
                     "model",
                     options=[
@@ -128,8 +122,8 @@ class SyncLipsyncNode(io.ComfyNode):
     @classmethod
     def execute(
         cls,
-        video_url,
-        audio_url,
+        video,
+        audio,
         model,
         sync_mode,
         temperature=None,
@@ -144,8 +138,8 @@ class SyncLipsyncNode(io.ComfyNode):
         Execute lipsync generation using Sync.so API.
 
         Args:
-            video_url: URL to the input video file
-            audio_url: URL to the input audio file
+            video: VIDEO input from ComfyUI (from Load Video node) or file path/URL
+            audio: AUDIO input from ComfyUI (from Load Audio node) or file path/URL
             model: Model to use for lipsync (lipsync-2, lipsync-1.9.0-beta, lipsync-2-pro)
             sync_mode: How to handle mismatched video/audio duration (bounce, loop, cut_off, silence, remap)
             temperature: Temperature parameter (0.0-2.0, optional)
@@ -163,17 +157,20 @@ class SyncLipsyncNode(io.ComfyNode):
             Exception: If generation fails or times out
         """
         try:
-            # Validate inputs
-            if not video_url or not video_url.strip():
-                raise ValueError("video_url is required and cannot be empty")
-            if not audio_url or not audio_url.strip():
-                raise ValueError("audio_url is required and cannot be empty")
+            # Extract file paths from VIDEO and AUDIO inputs
+            print("Processing video input...")
+            video_path = FileUtils.get_video_path(video)
+            print(f"Video path: {video_path}")
+
+            print("Processing audio input...")
+            audio_path = FileUtils.get_audio_path(audio)
+            print(f"Audio path: {audio_path}")
 
             print(f"Starting Sync.so lipsync generation...")
             print(f"Model: {model}")
             print(f"Sync mode: {sync_mode}")
-            print(f"Video URL: {video_url}")
-            print(f"Audio URL: {audio_url}")
+            print(f"Video: {video_path}")
+            print(f"Audio: {audio_path}")
             if temperature is not None:
                 print(f"Temperature: {temperature}")
             print(f"Active speaker detection: {active_speaker_detection}")
@@ -194,9 +191,12 @@ class SyncLipsyncNode(io.ComfyNode):
             occlusion_detection_bool = occlusion_detection == "enable"
 
             # Submit generation request
+            # Handle both file paths and URLs
             result = SyncApiHandler.create_generation(
-                video_url=video_url,
-                audio_url=audio_url,
+                video_path=video_path if os.path.exists(video_path) else None,
+                video_url=video_path if video_path.startswith(('http://', 'https://')) else None,
+                audio_path=audio_path if os.path.exists(audio_path) else None,
+                audio_url=audio_path if audio_path.startswith(('http://', 'https://')) else None,
                 model=model,
                 sync_mode=sync_mode,
                 temperature=temperature,

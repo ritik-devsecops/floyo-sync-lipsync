@@ -24,7 +24,8 @@ class SyncConfig:
 
     def _initialize(self):
         """Initialize configuration and API key."""
-        current_dir = os.path.dirname(os.path.abspath(__file__))
+        # Config file is at root level (parent directory of nodes/)
+        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         config_path = os.path.join(current_dir, "config.ini")
 
         config = configparser.ConfigParser()
