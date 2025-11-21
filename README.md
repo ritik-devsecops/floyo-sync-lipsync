@@ -104,17 +104,105 @@ The node will appear in ComfyUI under the **"Sync.so"** category as **"Sync.so L
 
 - `output_video_url` (STRING): URL to the generated lip-synced video
 
-### Example Workflow
+### Workflow Guide
 
-1. Connect a video URL to the `video_url` input
-2. Connect an audio URL to the `audio_url` input
-3. Select your preferred `model` and `sync_mode`
-4. Adjust optional parameters as needed (temperature, active_speaker_detection, etc.)
-5. Execute the workflow
-6. The node will automatically:
-   - Submit the generation request to Sync.so API
-   - Poll the status until completion
-  7. Output video URL can be connected to other nodes (e.g., video download nodes)
+#### Current Workflow (URL-based - Temporary Solution)
+
+**Step 1: Prepare Video and Audio URLs**
+
+Currently, the node accepts URLs as input (temporary solution until Floyo file upload logic is implemented). You need to provide publicly accessible URLs for video and audio files:
+
+```
+video_url: https://example.com/path/to/video.mp4
+audio_url: https://example.com/path/to/audio.wav
+```
+
+**Option A: Using URL String Inputs**
+1. Add the **"Sync.so Lipsync"** node to your workflow
+2. Manually enter the video URL in the `video_url` input field
+3. Manually enter the audio URL in the `audio_url` input field
+4. Configure other parameters (model, sync_mode, etc.)
+5. Connect the `output_video_url` output to downstream nodes
+
+**Option B: Using URL from Other Nodes (Recommended)**
+1. If you have a node that outputs URLs (e.g., from other API nodes, storage services)
+2. Connect that URL output to the `video_url` or `audio_url` input
+3. The node will automatically download from URLs and upload to Sync.so API
+
+**Step 2: Internal Process (Automatic)**
+
+Once you provide URLs, the node automatically:
+1. **Downloads** video and audio files from provided URLs to temporary files
+2. **Uploads** files to Sync.so API using multipart/form-data
+3. **Submits** generation request with all parameters
+4. **Polls** generation status every 5 seconds until completion
+5. **Returns** output video URL
+6. **Cleans up** temporary files automatically
+
+**Step 3: Using Output**
+
+The `output_video_url` can be connected to:
+- **Save Video** node: To save the generated video locally
+- **Seed API Video URL to Frames** node: To convert URL to video frames for further processing
+- **Any other node** that accepts video URLs or STRING input
+- **Display/Preview** nodes that support URL input
+
+#### Complete Workflow Example
+
+```
+[Video URL Source] ──┐
+                     ├──> [Sync.so Lipsync Node] ──> [output_video_url] ──> [Save Video Node]
+[Audio URL Source] ──┘                                    │
+                                                          └──> [Video URL to Frames Node]
+```
+
+**Detailed Steps:**
+
+1. **Add Sync.so Lipsync Node**
+   - Right-click in ComfyUI → Add Node → Sync.so → Sync.so Lipsync
+
+2. **Provide Input URLs**
+   - Enter video URL in `video_url` field (or connect from another node)
+   - Enter audio URL in `audio_url` field (or connect from another node)
+
+3. **Configure Parameters**
+   - Select `model`: Choose from lipsync-2, lipsync-1.9.0-beta, lipsync-2-pro
+   - Select `sync_mode`: Choose how to handle duration mismatch
+   - Adjust optional parameters as needed:
+     - `temperature`: Control generation randomness
+     - `active_speaker_detection`: Enable/disable speaker detection
+     - `occlusion_detection`: Enable/disable face blocking detection
+     - `start_time`/`end_time`: Trim video if needed
+     - `segment_secs`/`segment_frames`: For long video processing
+
+4. **Connect Output**
+   - Connect `output_video_url` (STRING) to your desired downstream node
+   - Examples:
+     - **Save Video** node: Directly save the video
+     - **Video URL to Frames** node: Convert for frame-by-frame processing
+     - **Any custom node** that accepts video URLs
+
+5. **Execute Workflow**
+   - Click "Queue Prompt" to start processing
+   - Node will automatically:
+     - Download files from URLs
+     - Upload to Sync.so API
+     - Wait for completion (with progress logs in console)
+     - Return output URL
+
+#### Future Workflow (When Floyo File Upload is Ready)
+
+Once Floyo implements file upload logic, the workflow will be simpler:
+
+```
+[Load Video Node] ──┐
+                    ├──> [Sync.so Lipsync Node] ──> [output_video_url] ──> [Save/Preview Node]
+[Load Audio Node] ──┘
+```
+
+- Video and audio can be uploaded directly through Floyo's file upload system
+- No need for external URLs
+- Files will be handled internally by Floyo platform
 
 ## API Key Setup
 

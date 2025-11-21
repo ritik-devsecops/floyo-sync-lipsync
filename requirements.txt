@@ -1,3 +1,5 @@
 requests>=2.31.0
 comfy-api
+opencv-python>=4.5.0
+numpy>=1.21.0
 
