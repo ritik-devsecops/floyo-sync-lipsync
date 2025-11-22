@@ -2,11 +2,12 @@
 Video URL Utilities for handling video URLs and frame extraction.
 Based on ComfyUI-Seed-API pattern for video URL to frames conversion.
 This utility helps convert video URLs to ComfyUI compatible formats.
+
+Follows Seed API pattern for video processing utilities.
 """
 
 import os
 import tempfile
-import requests
 import numpy as np
 from typing import Optional, List, Tuple
 
@@ -22,6 +23,8 @@ class VideoUrlUtils:
         """
         Download video from URL to a local file.
         
+        Uses sync_utils._download_file_from_url internally for consistency.
+        
         Args:
             video_url: URL to the video file
             output_path: Optional path to save the video. If None, creates temp file.
@@ -30,26 +33,16 @@ class VideoUrlUtils:
             str: Path to the downloaded video file
         """
         try:
-            print(f"Downloading video from URL: {video_url}")
+            from .sync_utils import SyncApiHandler
             
-            if output_path is None:
-                # Create temporary file
-                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
-                output_path = temp_file.name
-                temp_file.close()
+            # Use sync_utils download method for consistency
+            downloaded_path = SyncApiHandler.download_file_from_url(
+                video_url, 
+                suffix='.mp4',
+                output_path=output_path
+            )
             
-            # Download with streaming
-            response = requests.get(video_url, stream=True, timeout=300)
-            response.raise_for_status()
-            
-            # Write to file
-            with open(output_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-            
-            print(f"Video downloaded successfully to: {output_path}")
-            return output_path
+            return downloaded_path
             
         except Exception as e:
             error_msg = f"Error downloading video from URL {video_url}: {str(e)}"

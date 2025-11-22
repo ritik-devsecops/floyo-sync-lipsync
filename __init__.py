@@ -1,41 +1,40 @@
 """
 Floyo Sync.so Lipsync - ComfyUI custom node for Sync.so lipsync API
 Provides video lipsync capabilities via Sync.so API integration.
+Traditional ComfyUI node structure following Seed API pattern.
 """
 
-from typing_extensions import override
-from comfy_api.latest import ComfyExtension, io
+# Import node classes
+from .nodes.sync_lipsync_node import SyncLipsyncNode
+# VideoUrlToFramesNode is OPTIONAL - follows Seed API pattern for frame extraction
+# If you don't need frame extraction, you can comment out these lines
+from .nodes.video_url_to_frames_node_traditional import VideoUrlToFramesNode
+# VideoUrlDownloadNode - Downloads video from URL and saves locally
+from .nodes.video_url_download_node import VideoUrlDownloadNode
+# FramesToVideoWithAudioNode - Combines processed frames with audio
+from .nodes.frames_to_video_with_audio_node import FramesToVideoWithAudioNode
 
-from .nodes import SyncLipsyncNode, VideoUrlToFramesNode
+# Node class mappings for ComfyUI
+NODE_CLASS_MAPPINGS = {
+    "SyncLipsyncNode": SyncLipsyncNode,
+    # VideoUrlToFramesNode is OPTIONAL - uncomment/comment as needed
+    "VideoUrlToFramesNode": VideoUrlToFramesNode,
+    # VideoUrlDownloadNode - For downloading and saving video from URL
+    "VideoUrlDownloadNode": VideoUrlDownloadNode,
+    # FramesToVideoWithAudioNode - For combining processed frames with audio
+    "FramesToVideoWithAudioNode": FramesToVideoWithAudioNode,
+}
 
+# Display names for ComfyUI UI
+NODE_DISPLAY_NAME_MAPPINGS = {
+    "SyncLipsyncNode": "Sync.so Lipsync",
+    # VideoUrlToFramesNode is OPTIONAL
+    "VideoUrlToFramesNode": "Video URL to Frames",
+    # VideoUrlDownloadNode
+    "VideoUrlDownloadNode": "Video URL Download",
+    # FramesToVideoWithAudioNode
+    "FramesToVideoWithAudioNode": "Frames to Video with Audio",
+}
 
-class FloyoSyncLipsyncExtension(ComfyExtension):
-    """
-    ComfyUI Extension for Sync.so Lipsync API integration.
-    Provides nodes for video lipsync generation and video URL to frames conversion.
-    """
-
-    @override
-    async def get_node_list(self) -> list[type[io.ComfyNode]]:
-        """
-        Return list of node classes provided by this extension.
-
-        Returns:
-            list[type[io.ComfyNode]]: List of node classes
-        """
-        return [
-            SyncLipsyncNode,
-            VideoUrlToFramesNode,  # Companion node following Seed API pattern
-        ]
-
-
-async def comfy_entrypoint() -> FloyoSyncLipsyncExtension:
-    """
-    Entry point for ComfyUI to load this extension.
-    ComfyUI calls this function to load the extension and its nodes.
-
-    Returns:
-        FloyoSyncLipsyncExtension: The extension instance with nodes
-    """
-    return FloyoSyncLipsyncExtension()
-
+# Export for ComfyUI
+__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]

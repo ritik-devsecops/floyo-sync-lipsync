@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "floyo-sync-lipsync"
+version = "1.0.0"
+description = "ComfyUI custom node for Sync.so video lipsync API integration"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Floyo", email = "support@floyo.ai"}
+]
+keywords = ["comfyui", "lipsync", "sync.so", "video", "audio", "floyo"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+
+dependencies = [
+    "requests>=2.31.0",
+    "opencv-python>=4.5.0",
+    "numpy>=1.21.0",
+    "scipy>=1.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/FloyoAI/floyo-sync-lipsync"
+Documentation = "https://github.com/FloyoAI/floyo-sync-lipsync#readme"
+Repository = "https://github.com/FloyoAI/floyo-sync-lipsync"
+Issues = "https://github.com/FloyoAI/floyo-sync-lipsync/issues"
+
+[tool.setuptools]
+packages = ["nodes"]
+
+[tool.setuptools.package-data]
+"*" = ["*.ini", "*.md", "*.txt"]
+

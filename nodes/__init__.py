@@ -3,11 +3,7 @@ Nodes package for Floyo Sync.so Lipsync extension.
 Contains all node classes and their dependencies.
 """
 
-from .sync_node import SyncLipsyncNode
-from .video_url_to_frames_node import VideoUrlToFramesNode
+# This file is kept for package structure
+# Actual node imports are in parent __init__.py
 
-__all__ = [
-    "SyncLipsyncNode",
-    "VideoUrlToFramesNode",
-]
-
+__all__ = []

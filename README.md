@@ -1,296 +1,208 @@
 # Floyo Sync.so Lipsync - ComfyUI Custom Node
 
-A ComfyUI custom node that integrates with the Sync.so API to perform video lipsync operations. This node provides video lipsync capabilities for the Floyo platform using Sync.so's powerful API.
+A standalone ComfyUI custom node that integrates with Sync.so API to perform video lipsync operations. Follows Seed API pattern for Floyo platform.
 
 ## Features
 
-- **Video Lipsync**: Generate lip-synced videos with audio using Sync.so's API
-- **Multiple Models**: Support for various Sync.so models (lipsync-2, lipsync-1.9.0-beta, lipsync-2-pro)
-- **Flexible Sync Modes**: Handle mismatched video/audio durations with different modes:
-  - `bounce`: When video < audio, bounce (reverse playback) the video
-  - `loop`: When video < audio, loop the video
-  - `cut_off`: When audio > video, cut off audio
-  - `silence`: When video > audio, add silence to audio
-  - `remap`: Slow down or speed up video to match audio duration
-- **Advanced Options**: 
-  - Adjustable temperature parameter (0.0-2.0)
-  - Active speaker detection support
-  - Occlusion detection for face blocking
-  - Start/end time trimming
-  - Video segmentation support (segment_secs, segment_frames) for processing long videos
-- **Automatic Polling**: Waits for generation to complete automatically
-- **URL-based Inputs**: Currently accepts video and audio URLs (temporary solution until Floyo file upload is implemented)
-- **Error Handling**: Comprehensive error handling with user-friendly messages
+- **Video Lipsync**: Generate lip-synced videos with audio using Sync.so API
+- **Multiple Models**: Support for lipsync-2, lipsync-1.9.0-beta, lipsync-2-pro
+- **Flexible Sync Modes**: Handle mismatched video/audio durations (bounce, loop, cut_off, silence, remap)
+- **Advanced Options**: Temperature control, active speaker detection, video trimming, segmentation
+- **Direct Input Support**: Works with LoadVideo/LoadAudio nodes or file paths/URLs
+- **Automatic Processing**: Downloads, uploads, polls, and returns complete video with audio
+- **Video URL Download**: Companion node to download and save videos from URLs
 
 ## Installation
 
-### Prerequisites
-
-- ComfyUI installed and running
-- Python 3.8 or higher
-- Sync.so API key ([Get your API key](https://sync.so/))
-
-### Installation Steps
-
-1. **Clone or copy this repository** to your ComfyUI custom_nodes directory:
+1. **Copy to ComfyUI custom_nodes directory:**
    ```bash
    cd ComfyUI/custom_nodes
-   git clone <your-repo-url> floyo-sync-lipsync
+   git clone <repo-url> floyo-sync-lipsync
    ```
 
-   Or manually copy the `floyo-sync-lipsync` folder to your `ComfyUI/custom_nodes` directory.
-
-2. **Install dependencies**:
+2. **Install dependencies:**
    ```bash
    cd floyo-sync-lipsync
    pip install -r requirements.txt
    ```
+   
+   Or install as a package (using pyproject.toml):
+   ```bash
+   cd floyo-sync-lipsync
+   pip install -e .
+   ```
 
-3. **Configure your API key**:
-
-   Edit the `config.ini` file:
+3. **Configure API key:**
+   
+   Edit `config.ini`:
    ```ini
    [API]
    SYNC_API_KEY = your_actual_api_key_here
    ```
-
-   Or set it as an environment variable:
+   
+   Or set environment variable:
    ```bash
    export SYNC_API_KEY=your_actual_api_key_here
    ```
 
-4. **Restart ComfyUI** to load the new node
+4. **Restart ComfyUI**
 
 ## Usage
 
-The node will appear in ComfyUI under the **"Sync.so"** category as **"Sync.so Lipsync"**.
-
-### Inputs
-
-**Required:**
-- `video_url` (STRING): URL to the input video file
-- `audio_url` (STRING): URL to the input audio file
-- `model` (COMBO): Choose from available models:
-  - `lipsync-2` (default, recommended)
-  - `lipsync-1.9.0-beta`
-  - `lipsync-2-pro`
-- `sync_mode` (COMBO): How to handle mismatched video/audio duration:
-  - `bounce`: When video < audio, bounce (reverse playback) the video
-  - `loop`: When video < audio, loop the video
-  - `cut_off`: When audio > video, cut off audio
-  - `silence`: When video > audio, add silence to audio
-  - `remap`: Slow down or speed up video to match audio duration
-
-**Optional:**
-- `temperature` (FLOAT): Temperature parameter (0.0 - 2.0, default: 1.0)
-  - Lower values produce more conservative results
-  - Higher values produce more creative results
-- `active_speaker_detection` (COMBO): Enable/disable active speaker detection
-  - `enable`: Automatically detect active speakers
-  - `disable`: Disable active speaker detection (default)
-- `start_time` (FLOAT): Start time in seconds for video trimming (optional)
-- `end_time` (FLOAT): End time in seconds for video trimming (optional)
-- `occlusion_detection` (COMBO): Enable/disable occlusion detection for face blocking
-  - `enable`: Detect and handle occluded faces (when faces are blocked/covered)
-  - `disable`: Disable occlusion detection (default)
-- `segment_secs` (FLOAT): Segment video in seconds for processing (optional)
-  - Useful for processing long videos in smaller chunks
-  - Improves quality and reduces processing time for long videos
-- `segment_frames` (INT): Segment video in frames for processing (optional)
-  - Alternative to segment_secs for frame-based segmentation
-  - Specify number of frames per segment
-
-### Outputs
-
-- `output_video_url` (STRING): URL to the generated lip-synced video
-
-### Workflow Guide
-
-#### Current Workflow (URL-based - Temporary Solution)
-
-**Step 1: Prepare Video and Audio URLs**
-
-Currently, the node accepts URLs as input (temporary solution until Floyo file upload logic is implemented). You need to provide publicly accessible URLs for video and audio files:
+### Basic Workflow
 
 ```
-video_url: https://example.com/path/to/video.mp4
-audio_url: https://example.com/path/to/audio.wav
+LoadVideo ──┐
+            ├──→ Sync.so Lipsync → output_video_url → Video URL Download → video ✅
+LoadAudio ──┘
 ```
 
-**Option A: Using URL String Inputs**
-1. Add the **"Sync.so Lipsync"** node to your workflow
-2. Manually enter the video URL in the `video_url` input field
-3. Manually enter the audio URL in the `audio_url` input field
-4. Configure other parameters (model, sync_mode, etc.)
-5. Connect the `output_video_url` output to downstream nodes
+### Step-by-Step
 
-**Option B: Using URL from Other Nodes (Recommended)**
-1. If you have a node that outputs URLs (e.g., from other API nodes, storage services)
-2. Connect that URL output to the `video_url` or `audio_url` input
-3. The node will automatically download from URLs and upload to Sync.so API
+1. **Add LoadVideo Node**: Select your video file
+2. **Add LoadAudio Node**: Select your audio file
+3. **Add Sync.so Lipsync Node**: 
+   - Connect LoadVideo → `video` input
+   - Connect LoadAudio → `audio` input
+   - Select `model`: lipsync-2 (recommended)
+   - Select `sync_mode`: remap (recommended)
+4. **Add Video URL Download Node** (Optional):
+   - Connect `output_video_url` → `video_url` input
+   - Video will be automatically downloaded and saved
+5. **Queue Prompt**: Wait for completion
 
-**Step 2: Internal Process (Automatic)**
+## Node Reference
 
-Once you provide URLs, the node automatically:
-1. **Downloads** video and audio files from provided URLs to temporary files
-2. **Uploads** files to Sync.so API using multipart/form-data
-3. **Submits** generation request with all parameters
-4. **Polls** generation status every 5 seconds until completion
-5. **Returns** output video URL
-6. **Cleans up** temporary files automatically
+### Sync.so Lipsync Node
 
-**Step 3: Using Output**
+**Inputs:**
+- `video` (VIDEO): Connect from LoadVideo node or provide file path/URL
+- `audio` (AUDIO): Connect from LoadAudio node or provide file path/URL
+- `model` (COMBO): lipsync-2, lipsync-1.9.0-beta, lipsync-2-pro
+- `sync_mode` (COMBO): bounce, loop, cut_off, silence, remap
+- `temperature` (FLOAT, optional): 0.0-2.0, default: 1.0
+- `active_speaker_detection` (COMBO, optional): enable/disable
+- `start_time` (FLOAT, optional): Start time in seconds for trimming
+- `end_time` (FLOAT, optional): End time in seconds for trimming
+- `segment_secs` (FLOAT, optional): Segment video by time (seconds). Use 0 to disable. Recommended for videos > 60 seconds
+- `segment_frames` (INT, optional): Segment video by frame count. Use 0 to disable. Alternative to segment_secs
 
-The `output_video_url` can be connected to:
-- **Save Video** node: To save the generated video locally
-- **Seed API Video URL to Frames** node: To convert URL to video frames for further processing
-- **Any other node** that accepts video URLs or STRING input
-- **Display/Preview** nodes that support URL input
+**Duration Mismatch Handling:**
+- `sync_mode: remap` (recommended): Adjusts video speed to match audio length
+- Example: 5s video + 11s audio → 11s output video (slower playback)
+- See `FRAME_EXTRACTION_DETAILED_GUIDE.md` for complete explanation
 
-#### Complete Workflow Example
+**Outputs:**
+- `output_video_url` (STRING): URL to generated lip-synced video (with audio)
 
-```
-[Video URL Source] ──┐
-                     ├──> [Sync.so Lipsync Node] ──> [output_video_url] ──> [Save Video Node]
-[Audio URL Source] ──┘                                    │
-                                                          └──> [Video URL to Frames Node]
-```
+### Video URL Download Node
 
-**Detailed Steps:**
+**Inputs:**
+- `video_url` (STRING): Connect from Sync.so Lipsync `output_video_url`
+- `output_path` (STRING, optional): Directory to save video
+- `filename` (STRING, optional): Custom filename
 
-1. **Add Sync.so Lipsync Node**
-   - Right-click in ComfyUI → Add Node → Sync.so → Sync.so Lipsync
+**Outputs:**
+- `video` (VIDEO): Downloaded video file path
 
-2. **Provide Input URLs**
-   - Enter video URL in `video_url` field (or connect from another node)
-   - Enter audio URL in `audio_url` field (or connect from another node)
+### Video URL to Frames Node (Optional)
 
-3. **Configure Parameters**
-   - Select `model`: Choose from lipsync-2, lipsync-1.9.0-beta, lipsync-2-pro
-   - Select `sync_mode`: Choose how to handle duration mismatch
-   - Adjust optional parameters as needed:
-     - `temperature`: Control generation randomness
-     - `active_speaker_detection`: Enable/disable speaker detection
-     - `occlusion_detection`: Enable/disable face blocking detection
-     - `start_time`/`end_time`: Trim video if needed
-     - `segment_secs`/`segment_frames`: For long video processing
+**Inputs:**
+- `video_url` (STRING): Video URL to extract frames from
+- `num_frames` (INT): Number of frames to extract evenly (default: 10)
+- `extraction_fps` (FLOAT, optional): Extract at specific FPS (default: 0.0 = use num_frames)
 
-4. **Connect Output**
-   - Connect `output_video_url` (STRING) to your desired downstream node
-   - Examples:
-     - **Save Video** node: Directly save the video
-     - **Video URL to Frames** node: Convert for frame-by-frame processing
-     - **Any custom node** that accepts video URLs
+**Outputs:**
+- `images` (IMAGE): Extracted frames as IMAGE tensor
+- `video_url` (STRING): Original video URL (for audio extraction)
 
-5. **Execute Workflow**
-   - Click "Queue Prompt" to start processing
-   - Node will automatically:
-     - Download files from URLs
-     - Upload to Sync.so API
-     - Wait for completion (with progress logs in console)
-     - Return output URL
+**Frame Extraction Guide:**
+- `num_frames`: Extracts X frames evenly throughout video (e.g., 10 = 10 frames)
+- `extraction_fps`: Extracts at specific rate (e.g., 1.0 = 1 frame/second)
+- If `extraction_fps` = 0.0, uses `num_frames` instead
+- See `FRAME_EXTRACTION_DETAILED_GUIDE.md` for complete examples
 
-#### Future Workflow (When Floyo File Upload is Ready)
+### Frames to Video with Audio Node
 
-Once Floyo implements file upload logic, the workflow will be simpler:
+**Inputs:**
+- `images` (IMAGE): Processed frames from image processing nodes
+- `fps` (FLOAT): Output video frame rate (default: 30.0)
+- `audio` (AUDIO, optional): Audio file to merge
+- `video_url` (STRING, optional): Video URL to extract audio from
+- `output_path` (STRING, optional): Directory to save video
 
-```
-[Load Video Node] ──┐
-                    ├──> [Sync.so Lipsync Node] ──> [output_video_url] ──> [Save/Preview Node]
-[Load Audio Node] ──┘
-```
+**Outputs:**
+- `video` (VIDEO): Final video with processed frames and audio
 
-- Video and audio can be uploaded directly through Floyo's file upload system
-- No need for external URLs
-- Files will be handled internally by Floyo platform
+**Note:** Requires FFmpeg for audio extraction/merging. See AUDIO_HANDLING_WORKFLOW.md for complete workflow.
+
+## Parameters Explained
+
+### Models
+- **lipsync-2**: Balanced quality and speed (recommended)
+- **lipsync-1.9.0-beta**: Fastest processing
+- **lipsync-2-pro**: Highest quality (may require subscription)
+
+### Sync Modes
+- **remap**: Adjust video speed to match audio duration (recommended)
+- **bounce**: Reverse playback when video < audio
+- **loop**: Loop video when video < audio
+- **cut_off**: Trim audio when audio > video
+- **silence**: Add silence when video > audio
+
+### Advanced Options
+- **temperature** (0.0-2.0): Controls generation randomness. Lower = conservative, Higher = creative
+- **active_speaker_detection**: Automatically detect active speakers in video
+- **start_time/end_time**: Trim video to specific time range
+- **segment_secs/segment_frames**: Process long videos in segments for better quality (see FRAME_EXTRACTION_AND_SEGMENTATION.md)
+
+### Frame Extraction
+- **Video URL to Frames Node**: Extract frames from video URLs for image processing
+- Follows Seed API pattern (standard for Floyo platform)
+- See FRAME_EXTRACTION_AND_SEGMENTATION.md for detailed guide
 
 ## API Key Setup
 
-### Get Your API Key
+Get your API key from [Sync.so](https://sync.so/) and set it in `config.ini`:
 
-1. Visit [Sync.so](https://sync.so/)
-2. Sign up or log in to your account
-3. Navigate to API settings to get your API key
-
-### Configuration Options
-
-You can set your API key in one of two ways:
-
-**Option 1: config.ini file** (recommended)
 ```ini
 [API]
-SYNC_API_KEY = your_actual_api_key_here
+SYNC_API_KEY = your_api_key_here
 ```
-
-**Option 2: Environment Variable**
-```bash
-export SYNC_API_KEY=your_actual_api_key_here
-```
-
-The node will check environment variables first, then fall back to the config.ini file.
 
 ## Troubleshooting
 
-### Common Issues
+**"SYNC_API_KEY not found"**
+- Check `config.ini` file exists and has correct format
+- Restart ComfyUI after setting API key
+- Check console logs for detailed error messages
 
-**1. "SYNC_API_KEY not found" Error**
-- Ensure your API key is set in `config.ini` or as an environment variable
-- Check that the API key is not empty or a placeholder
-- Restart ComfyUI after setting the API key
+**"Prompt has no outputs"**
+- Ensure Video URL Download node is connected (returns VIDEO type)
+- Or connect output to other nodes that accept STRING/VIDEO
 
-**2. "Generation failed" Error**
-- Check that the video and audio URLs are valid and accessible
-- Verify that the URLs point to supported video/audio formats
-- Ensure your Sync.so API key has sufficient credits/quota
-- Check the ComfyUI console for detailed error messages
-
-**3. "Generation timed out" Error**
-- The default timeout is 10 minutes (600 seconds)
-- For very long videos, generation may take longer
-- Check Sync.so API status page for any service issues
-- Verify your internet connection is stable
-
-**4. "Invalid input" Error**
-- Ensure both `video_url` and `audio_url` are provided and non-empty
-- Verify URLs are properly formatted
-- Check that URLs are accessible from the ComfyUI server
-
-**5. Node not appearing in ComfyUI**
-- Ensure the folder is in the correct location: `ComfyUI/custom_nodes/floyo-sync-lipsync/`
-- Check that all dependencies are installed: `pip install -r requirements.txt`
-- Restart ComfyUI completely
-- Check ComfyUI console for any import errors
-
-### Getting Help
-
-- Check the ComfyUI console for detailed error messages
-- Review Sync.so API documentation: [https://docs.sync.so/](https://docs.sync.so/)
-- Ensure you're using the latest version of the node
+**"422 Unprocessable Entity"**
+- Check that all parameters are valid
+- Some parameters may not be supported by current API version
 
 ## Technical Details
 
-### API Endpoints Used
+- **API Endpoint**: `https://api.sync.so/v2/generate`
+- **Polling**: Automatic, every 5 seconds, 10-minute timeout
+- **File Handling**: Supports local files and URLs (auto-download)
+- **Output**: Complete video file with synced audio embedded
 
-- **Generation**: `POST https://api.sync.so/v2/generate`
-- **Status Check**: `GET https://api.sync.so/v2/generate/{generation_id}`
+## Documentation
 
-### Polling Behavior
-
-- The node automatically polls the generation status every 5 seconds
-- Default timeout is 10 minutes (600 seconds)
-- Generation statuses: `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`
-
-### File Format Support
-
-- Supported video formats: MP4, MOV, AVI, and other formats supported by Sync.so API
-- Supported audio formats: WAV, MP3, AAC, and other formats supported by Sync.so API
-
-## Future Updates
-
-This node currently accepts URLs as input (temporary solution). Future updates will include:
-- Direct file upload support when Floyo file upload logic is implemented
-- Additional Sync.so API features as they become available
-- Enhanced error handling and retry logic
+- `README.md` - This file (quick start)
+- `QUICK_START_WORKFLOW.md` - Step-by-step workflow guide with examples
+- `AUDIO_HANDLING_WORKFLOW.md` - Audio handling when processing frames
+- `FRAME_EXTRACTION_AND_SEGMENTATION.md` - Frame extraction and segmentation overview
+- `FRAME_EXTRACTION_DETAILED_GUIDE.md` - **Complete guide** with examples:
+  - `num_frames` vs `extraction_fps` explained
+  - Video/audio duration mismatch handling
+  - Segmentation use cases and examples
+  - Your specific case (5s video, 11s audio) solutions
 
 ## License
 
@@ -298,7 +210,6 @@ See LICENSE file for details.
 
 ## Credits
 
-- Built for the Floyo platform
+- Built for Floyo platform
 - Uses Sync.so API for lipsync generation
-- Based on ComfyUI custom node structure
-
+- Follows Seed API pattern for consistency
