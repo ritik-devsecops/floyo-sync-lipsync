@@ -38,6 +38,49 @@ class VideoFromFile:
             # Fallback: return default dimensions if can't read
             print(f"Warning: Could not get video dimensions: {str(e)}")
             return (1920, 1080)  # Default fallback
+    
+    def save_to(self, output_path: str, filename_prefix: str = "", format: str = "auto", codec: str = "auto"):
+        """
+        Save video to specified path with given parameters.
+        This method is called by ComfyUI's Save Video node.
+        
+        Args:
+            output_path: Directory to save the video
+            filename_prefix: Prefix for the filename
+            format: Video format (auto, mp4, etc.)
+            codec: Video codec (auto, h264, etc.)
+        
+        Returns:
+            str: Path to the saved video file
+        """
+        import shutil
+        import time
+        
+        # Create output directory if it doesn't exist
+        os.makedirs(output_path, exist_ok=True)
+        
+        # Generate filename
+        if filename_prefix:
+            # Remove any path separators and clean up
+            filename_prefix = filename_prefix.strip().replace(os.sep, "_")
+            if not filename_prefix.endswith("_"):
+                filename_prefix += "_"
+        else:
+            filename_prefix = ""
+        
+        # Generate timestamp-based filename
+        timestamp = int(time.time())
+        filename = f"{filename_prefix}{timestamp:05d}.mp4"
+        
+        # Full path for output
+        output_file = os.path.join(output_path, filename)
+        
+        # Copy the video file to the output location
+        # Since the video is already created, we just copy it
+        shutil.copy2(self.file_path, output_file)
+        
+        print(f"Video saved to: {output_file}")
+        return output_file
 
 
 class FramesToVideoWithAudioNode:
