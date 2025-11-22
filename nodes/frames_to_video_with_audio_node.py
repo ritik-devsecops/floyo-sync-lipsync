@@ -202,57 +202,21 @@ class FramesToVideoWithAudioNode:
             print(f"  FPS: {fps}")
             print(f"  Total frames: {batch_size}")
             
-            # Use H.264 codec for better compatibility (mp4v can have issues)
-            fourcc = cv2.VideoWriter_fourcc(*'avc1')  # H.264 codec
-            # Fallback to mp4v if avc1 not available
-            out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
+            # For large resolutions (> 1920x1080), use FFmpeg instead of OpenCV VideoWriter
+            # OpenCV VideoWriter has limitations with very large resolutions
+            max_opencv_resolution = 1920 * 1080 * 2  # 2x 1080p
+            current_resolution = width * height
             
-            # Verify VideoWriter is opened correctly
-            if not out.isOpened():
-                print(f"  ⚠ Warning: avc1 codec not available, trying mp4v...")
-                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
-                if not out.isOpened():
-                    raise Exception(f"Could not initialize VideoWriter for {width}x{height} @ {fps}fps")
-            
-            frames_written = 0
-            for i in range(batch_size):
-                frame = images[i]
-                
-                # Ensure frame is numpy array (in case it's still a tensor)
-                if hasattr(frame, 'cpu'):
-                    frame = frame.cpu().numpy()
-                
-                # Check frame shape
-                if len(frame.shape) != 3 or frame.shape[2] != 3:
-                    print(f"  ⚠ Warning: Frame {i} has unexpected shape: {frame.shape}, skipping...")
-                    continue
-                
-                # Ensure frame matches expected dimensions
-                if frame.shape[0] != height or frame.shape[1] != width:
-                    print(f"  → Resizing frame {i} from {frame.shape[0]}x{frame.shape[1]} to {height}x{width}")
-                    frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_LINEAR)
-                
-                # Convert from float (0-1) to uint8 (0-255)
-                if frame.dtype != np.uint8:
-                    # Clamp values to 0-1 range if needed
-                    if frame.max() > 1.0:
-                        frame = np.clip(frame, 0, 1)
-                    frame = (frame * 255).astype(np.uint8)
-                
-                # Convert RGB to BGR for OpenCV
-                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-                
-                # Write frame
-                success = out.write(frame_bgr)
-                if success:
-                    frames_written += 1
-                else:
-                    print(f"  ⚠ Warning: Failed to write frame {i}")
-            
-            out.release()
-            print(f"✓ Video created: {output_video_path}")
-            print(f"✓ Frames written: {frames_written}/{batch_size}")
+            if current_resolution > max_opencv_resolution:
+                print(f"  → Large resolution detected ({width}x{height}), using FFmpeg for better compatibility...")
+                try:
+                    output_video_path = self._create_video_with_ffmpeg(images, width, height, fps, output_video_path, batch_size)
+                except FileNotFoundError:
+                    print(f"  ⚠ Warning: FFmpeg not found, falling back to OpenCV (may fail for large resolutions)...")
+                    output_video_path = self._create_video_with_opencv(images, width, height, fps, output_video_path, batch_size)
+            else:
+                # Use OpenCV VideoWriter for smaller resolutions
+                output_video_path = self._create_video_with_opencv(images, width, height, fps, output_video_path, batch_size)
             
             # Verify video file was created and has content
             if not os.path.exists(output_video_path):
@@ -333,6 +297,147 @@ class FramesToVideoWithAudioNode:
             error_msg = f"Error creating video from frames: {str(e)}"
             print(f"\n❌ ERROR: {error_msg}")
             raise Exception(error_msg) from e
+    
+    @staticmethod
+    def _create_video_with_opencv(images, width, height, fps, output_path, batch_size):
+        """Create video using OpenCV VideoWriter (for smaller resolutions)."""
+        import cv2
+        
+        # Use H.264 codec for better compatibility
+        fourcc = cv2.VideoWriter_fourcc(*'avc1')  # H.264 codec
+        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+        
+        # Verify VideoWriter is opened correctly
+        if not out.isOpened():
+            print(f"  ⚠ Warning: avc1 codec not available, trying mp4v...")
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+            if not out.isOpened():
+                raise Exception(f"Could not initialize VideoWriter for {width}x{height} @ {fps}fps")
+        
+        frames_written = 0
+        for i in range(batch_size):
+            frame = images[i]
+            
+            # Ensure frame is numpy array
+            if hasattr(frame, 'cpu'):
+                frame = frame.cpu().numpy()
+            
+            # Check frame shape
+            if len(frame.shape) != 3 or frame.shape[2] != 3:
+                print(f"  ⚠ Warning: Frame {i} has unexpected shape: {frame.shape}, skipping...")
+                continue
+            
+            # Ensure frame matches expected dimensions
+            if frame.shape[0] != height or frame.shape[1] != width:
+                frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_LINEAR)
+            
+            # Convert from float (0-1) to uint8 (0-255)
+            if frame.dtype != np.uint8:
+                if frame.max() > 1.0:
+                    frame = np.clip(frame, 0, 1)
+                frame = (frame * 255).astype(np.uint8)
+            
+            # Convert RGB to BGR for OpenCV
+            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            
+            # Write frame
+            success = out.write(frame_bgr)
+            if success:
+                frames_written += 1
+            else:
+                print(f"  ⚠ Warning: Failed to write frame {i}")
+        
+        out.release()
+        print(f"✓ Video created with OpenCV: {output_path}")
+        print(f"✓ Frames written: {frames_written}/{batch_size}")
+        
+        if frames_written == 0:
+            raise Exception(f"Failed to write any frames. VideoWriter may not support {width}x{height} resolution.")
+        
+        return output_path
+    
+    @staticmethod
+    def _create_video_with_ffmpeg(images, width, height, fps, output_path, batch_size):
+        """Create video using FFmpeg (for large resolutions)."""
+        import subprocess
+        import tempfile
+        
+        # Create temporary directory for frames
+        temp_dir = tempfile.mkdtemp()
+        frame_pattern = os.path.join(temp_dir, "frame_%06d.png")
+        
+        try:
+            print(f"  → Saving {batch_size} frames to temporary directory...")
+            
+            # Save all frames as PNG files
+            for i in range(batch_size):
+                frame = images[i]
+                
+                # Ensure frame is numpy array
+                if hasattr(frame, 'cpu'):
+                    frame = frame.cpu().numpy()
+                
+                # Check frame shape
+                if len(frame.shape) != 3 or frame.shape[2] != 3:
+                    continue
+                
+                # Ensure frame matches expected dimensions
+                if frame.shape[0] != height or frame.shape[1] != width:
+                    import cv2
+                    frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_LINEAR)
+                
+                # Convert from float (0-1) to uint8 (0-255)
+                if frame.dtype != np.uint8:
+                    if frame.max() > 1.0:
+                        frame = np.clip(frame, 0, 1)
+                    frame = (frame * 255).astype(np.uint8)
+                
+                # Save frame as PNG
+                frame_path = os.path.join(temp_dir, f"frame_{i+1:06d}.png")
+                import cv2
+                # Convert RGB to BGR for OpenCV
+                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                cv2.imwrite(frame_path, frame_bgr)
+            
+            print(f"  → Frames saved, creating video with FFmpeg...")
+            
+            # Use FFmpeg to create video from frames
+            # FFmpeg command: ffmpeg -framerate fps -i frame_%06d.png -c:v libx264 -pix_fmt yuv420p output.mp4
+            ffmpeg_cmd = [
+                'ffmpeg',
+                '-y',  # Overwrite output file
+                '-framerate', str(fps),
+                '-i', os.path.join(temp_dir, 'frame_%06d.png'),
+                '-c:v', 'libx264',  # H.264 codec
+                '-pix_fmt', 'yuv420p',  # Pixel format for compatibility
+                '-crf', '18',  # High quality
+                output_path
+            ]
+            
+            result = subprocess.run(
+                ffmpeg_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            if result.returncode != 0:
+                raise Exception(f"FFmpeg failed: {result.stderr}")
+            
+            print(f"✓ Video created with FFmpeg: {output_path}")
+            print(f"✓ Frames processed: {batch_size}")
+            
+        finally:
+            # Cleanup temporary frames
+            import shutil
+            try:
+                shutil.rmtree(temp_dir)
+                print(f"  → Temporary frames cleaned up")
+            except:
+                pass
+        
+        return output_path
     
     @staticmethod
     def _extract_audio_from_video(video_path: str) -> str:
