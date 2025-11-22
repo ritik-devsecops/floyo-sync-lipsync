@@ -93,6 +93,13 @@ class FramesToVideoWithAudioNode:
             if images is None or len(images) == 0:
                 raise ValueError("No frames provided")
             
+            # Convert PyTorch tensor to numpy array if needed
+            # ComfyUI IMAGE format can be either torch.Tensor or numpy.ndarray
+            if hasattr(images, 'cpu'):
+                # It's a PyTorch tensor
+                print("Converting PyTorch tensor to numpy array...")
+                images = images.cpu().numpy()
+            
             batch_size, height, width, channels = images.shape
             print(f"Frames: {batch_size}, Resolution: {width}x{height}")
             print(f"Target FPS: {fps}")
@@ -120,9 +127,18 @@ class FramesToVideoWithAudioNode:
             
             for i in range(batch_size):
                 frame = images[i]
+                
+                # Ensure frame is numpy array (in case it's still a tensor)
+                if hasattr(frame, 'cpu'):
+                    frame = frame.cpu().numpy()
+                
                 # Convert from float (0-1) to uint8 (0-255)
                 if frame.dtype != np.uint8:
+                    # Clamp values to 0-1 range if needed
+                    if frame.max() > 1.0:
+                        frame = np.clip(frame, 0, 1)
                     frame = (frame * 255).astype(np.uint8)
+                
                 # Convert RGB to BGR for OpenCV
                 frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
                 out.write(frame_bgr)

@@ -5,6 +5,7 @@ This node can be used with any API node that outputs video URLs.
 """
 
 import numpy as np
+import torch
 from .video_url_utils import VideoUrlUtils
 
 
@@ -104,11 +105,28 @@ class VideoUrlToFramesNode:
             
             print(f"Successfully extracted {image_array.shape[0]} frames")
             print(f"Frame dimensions: {image_array.shape[1]}x{image_array.shape[2]}")
+            
+            # Convert numpy array to PyTorch tensor (ComfyUI IMAGE format requirement)
+            # ComfyUI IMAGE format: torch.Tensor with shape [batch, height, width, channels]
+            # Values should be in range 0.0 to 1.0 (float32)
+            if isinstance(image_array, np.ndarray):
+                print(f"Converting numpy array to PyTorch tensor...")
+                # Ensure values are in 0-1 range (should already be normalized)
+                if image_array.max() > 1.0:
+                    image_array = image_array / 255.0
+                
+                # Convert to torch tensor
+                image_tensor = torch.from_numpy(image_array).float()
+                print(f"Converted to PyTorch tensor: {image_tensor.shape}, dtype: {image_tensor.dtype}")
+            else:
+                # Already a tensor, use as is
+                image_tensor = image_array
+            
             print(f"Original video URL preserved for audio extraction")
             print(f"Video URL to frames conversion completed!")
             
-            # Return: frames and original video URL (for audio extraction later)
-            return (image_array, video_url)
+            # Return: frames as PyTorch tensor and original video URL (for audio extraction later)
+            return (image_tensor, video_url)
             
         except ValueError as e:
             error_msg = f"Invalid input: {str(e)}"
