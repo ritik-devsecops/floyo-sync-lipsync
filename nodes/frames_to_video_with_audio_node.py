@@ -9,6 +9,37 @@ import numpy as np
 from typing import Optional
 
 
+class VideoFromFile:
+    """
+    Wrapper class to create a VIDEO object compatible with ComfyUI.
+    This mimics the interface expected by ComfyUI's Save Video node.
+    """
+    def __init__(self, file_path: str):
+        self.file_path = file_path
+        self.file = file_path
+        self.filename = os.path.basename(file_path)
+    
+    def get_stream_source(self):
+        """Return the file path for video streaming."""
+        return self.file_path
+    
+    def get_dimensions(self):
+        """Get video dimensions (width, height) using OpenCV."""
+        try:
+            import cv2
+            cap = cv2.VideoCapture(self.file_path)
+            if not cap.isOpened():
+                raise Exception(f"Could not open video: {self.file_path}")
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            cap.release()
+            return (width, height)
+        except Exception as e:
+            # Fallback: return default dimensions if can't read
+            print(f"Warning: Could not get video dimensions: {str(e)}")
+            return (1920, 1080)  # Default fallback
+
+
 class FramesToVideoWithAudioNode:
     """
     Frames to Video with Audio Node for ComfyUI.
@@ -206,7 +237,10 @@ class FramesToVideoWithAudioNode:
             print(f"✓ Final video saved: {output_video_path}")
             print("=" * 60)
             
-            return (output_video_path,)
+            # Return VIDEO object (not just string path) for ComfyUI compatibility
+            # Save Video node expects VIDEO object with get_dimensions() method
+            video_obj = VideoFromFile(output_video_path)
+            return (video_obj,)
             
         except Exception as e:
             error_msg = f"Error creating video from frames: {str(e)}"
