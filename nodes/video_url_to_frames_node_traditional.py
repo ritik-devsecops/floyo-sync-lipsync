@@ -4,6 +4,7 @@ Converts video URLs to ComfyUI IMAGE format following Seed API pattern.
 This node can be used with any API node that outputs video URLs.
 """
 
+import os
 import numpy as np
 import torch
 from .video_url_utils import VideoUrlUtils
@@ -41,21 +42,25 @@ class VideoUrlToFramesNode:
                     "multiline": False,
                     "tooltip": "Video URL to extract frames from."
                 }),
-                "num_frames": ("INT", {
-                    "default": 10,
-                    "min": 1,
-                    "max": 100,
-                    "step": 1,
-                    "tooltip": "Number of frames to extract evenly. Example: 10 = 10 frames throughout video. Leave default for most cases."
+                "extraction_mode": (["auto", "num_frames", "extraction_fps"], {
+                    "default": "auto",
+                    "tooltip": "Auto: Extract all frames at original FPS (recommended). num_frames: Extract specific number. extraction_fps: Extract at specific FPS."
                 }),
             },
             "optional": {
+                "num_frames": ("INT", {
+                    "default": 10,
+                    "min": 1,
+                    "max": 1000,
+                    "step": 1,
+                    "tooltip": "Number of frames to extract evenly. Only used when extraction_mode is 'num_frames'."
+                }),
                 "extraction_fps": ("FLOAT", {
                     "default": 0.0,
                     "min": 0.0,
-                    "max": 30.0,
+                    "max": 60.0,
                     "step": 0.1,
-                    "tooltip": "Extract at specific FPS (overrides num_frames). Example: 1.0 = 1 frame/second. Set 0.0 to use num_frames instead."
+                    "tooltip": "Extract at specific FPS. Only used when extraction_mode is 'extraction_fps'. Set to 0.0 to extract all frames."
                 }),
             }
         }
@@ -64,19 +69,20 @@ class VideoUrlToFramesNode:
     RETURN_NAMES = ("images", "video_url")
     FUNCTION = "execute"
     CATEGORY = "Sync.so"
-    DESCRIPTION = "Extract frames from video URL for image processing. Returns frames and original video URL for audio extraction."
+    DESCRIPTION = "Extract frames from video URL. Auto mode extracts all frames at original FPS (recommended). Returns frames and original video URL for audio extraction."
     
-    def execute(self, video_url, num_frames=10, extraction_fps=0.0):
+    def execute(self, video_url, extraction_mode="auto", num_frames=10, extraction_fps=0.0):
         """
         Execute video URL to frames conversion.
         
         Args:
             video_url: URL to the video file
-            num_frames: Number of frames to extract (evenly distributed)
-            extraction_fps: Extract frames at specific FPS (optional, overrides num_frames if > 0)
+            extraction_mode: "auto" (extract all at original FPS), "num_frames" (extract X frames), or "extraction_fps" (extract at specific FPS)
+            num_frames: Number of frames to extract (only used when extraction_mode is "num_frames")
+            extraction_fps: Extract frames at specific FPS (only used when extraction_mode is "extraction_fps")
         
         Returns:
-            tuple: (image_array,) - Extracted frames as IMAGE tensor
+            tuple: (image_array, video_url) - Extracted frames as IMAGE tensor and original video URL
         """
         try:
             # Validate input
@@ -85,10 +91,55 @@ class VideoUrlToFramesNode:
             
             print(f"Converting video URL to frames...")
             print(f"Video URL: {video_url}")
+            print(f"Extraction mode: {extraction_mode}")
             
-            # Extract frames from video URL
-            # Use extraction_fps if provided, otherwise use num_frames
-            if extraction_fps and extraction_fps > 0:
+            # Download video first to get properties (needed for auto mode)
+            import tempfile
+            temp_video_path = None
+            
+            if extraction_mode == "auto":
+                # Auto mode: Extract all frames at original video FPS
+                print(f"\n[AUTO MODE] Detecting video properties and extracting all frames...")
+                
+                # Download video once
+                temp_video_path = VideoUrlUtils.download_video_from_url(video_url)
+                
+                # Get video FPS and properties
+                import cv2
+                cap = cv2.VideoCapture(temp_video_path)
+                if not cap.isOpened():
+                    raise Exception(f"Could not open video: {temp_video_path}")
+                
+                video_fps = cap.get(cv2.CAP_PROP_FPS)
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                cap.release()
+                
+                print(f"  → Video FPS: {video_fps}")
+                print(f"  → Total frames: {total_frames}")
+                print(f"  → Extracting all {total_frames} frames at original FPS ({video_fps})...")
+                
+                # Extract all frames using the already downloaded video
+                frames = VideoUrlUtils.extract_frames_from_video(
+                    temp_video_path,
+                    fps=video_fps  # Extract at original FPS (will get all frames)
+                )
+                
+                # Convert to ComfyUI format
+                image_array, _ = VideoUrlUtils.frames_to_comfyui_image(frames)
+                
+                # Cleanup temp file
+                if temp_video_path and os.path.exists(temp_video_path):
+                    try:
+                        os.remove(temp_video_path)
+                        print(f"  → Temporary video cleaned up")
+                    except:
+                        pass
+                
+            elif extraction_mode == "extraction_fps":
+                # FPS-based extraction
+                if extraction_fps <= 0:
+                    raise ValueError("extraction_fps must be > 0 when extraction_mode is 'extraction_fps'")
+                
                 print(f"Extraction FPS: {extraction_fps}")
                 image_array, _ = VideoUrlUtils.video_url_to_frames(
                     video_url=video_url,
@@ -96,6 +147,7 @@ class VideoUrlToFramesNode:
                     keep_temp_file=False
                 )
             else:
+                # num_frames mode (default)
                 print(f"Num frames: {num_frames}")
                 image_array, _ = VideoUrlUtils.video_url_to_frames(
                     video_url=video_url,

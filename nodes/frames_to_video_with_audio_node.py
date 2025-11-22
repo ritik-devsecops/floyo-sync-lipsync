@@ -39,7 +39,7 @@ class VideoFromFile:
             print(f"Warning: Could not get video dimensions: {str(e)}")
             return (1920, 1080)  # Default fallback
     
-    def save_to(self, output_path: str, filename_prefix: str = "", format: str = "auto", codec: str = "auto"):
+    def save_to(self, output_path: str, filename_prefix: str = "", format: str = "auto", codec: str = "auto", metadata: dict = None, **kwargs):
         """
         Save video to specified path with given parameters.
         This method is called by ComfyUI's Save Video node.
@@ -49,6 +49,8 @@ class VideoFromFile:
             filename_prefix: Prefix for the filename
             format: Video format (auto, mp4, etc.)
             codec: Video codec (auto, h264, etc.)
+            metadata: Optional metadata dictionary (ignored but accepted for compatibility)
+            **kwargs: Additional parameters (ignored but accepted for compatibility)
         
         Returns:
             str: Path to the saved video file
@@ -196,15 +198,40 @@ class FramesToVideoWithAudioNode:
             
             # Convert frames to video
             print(f"\nCreating video from frames...")
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            print(f"  Video dimensions: {width}x{height}")
+            print(f"  FPS: {fps}")
+            print(f"  Total frames: {batch_size}")
+            
+            # Use H.264 codec for better compatibility (mp4v can have issues)
+            fourcc = cv2.VideoWriter_fourcc(*'avc1')  # H.264 codec
+            # Fallback to mp4v if avc1 not available
             out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
             
+            # Verify VideoWriter is opened correctly
+            if not out.isOpened():
+                print(f"  ⚠ Warning: avc1 codec not available, trying mp4v...")
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
+                if not out.isOpened():
+                    raise Exception(f"Could not initialize VideoWriter for {width}x{height} @ {fps}fps")
+            
+            frames_written = 0
             for i in range(batch_size):
                 frame = images[i]
                 
                 # Ensure frame is numpy array (in case it's still a tensor)
                 if hasattr(frame, 'cpu'):
                     frame = frame.cpu().numpy()
+                
+                # Check frame shape
+                if len(frame.shape) != 3 or frame.shape[2] != 3:
+                    print(f"  ⚠ Warning: Frame {i} has unexpected shape: {frame.shape}, skipping...")
+                    continue
+                
+                # Ensure frame matches expected dimensions
+                if frame.shape[0] != height or frame.shape[1] != width:
+                    print(f"  → Resizing frame {i} from {frame.shape[0]}x{frame.shape[1]} to {height}x{width}")
+                    frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_LINEAR)
                 
                 # Convert from float (0-1) to uint8 (0-255)
                 if frame.dtype != np.uint8:
@@ -215,10 +242,27 @@ class FramesToVideoWithAudioNode:
                 
                 # Convert RGB to BGR for OpenCV
                 frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-                out.write(frame_bgr)
+                
+                # Write frame
+                success = out.write(frame_bgr)
+                if success:
+                    frames_written += 1
+                else:
+                    print(f"  ⚠ Warning: Failed to write frame {i}")
             
             out.release()
             print(f"✓ Video created: {output_video_path}")
+            print(f"✓ Frames written: {frames_written}/{batch_size}")
+            
+            # Verify video file was created and has content
+            if not os.path.exists(output_video_path):
+                raise Exception(f"Video file was not created: {output_video_path}")
+            
+            file_size = os.path.getsize(output_video_path)
+            if file_size < 1000:  # Less than 1KB is suspicious
+                raise Exception(f"Video file is too small ({file_size} bytes) - video creation may have failed")
+            
+            print(f"✓ Video file size: {file_size / 1024 / 1024:.2f} MB")
             
             # Handle audio
             audio_path = None
