@@ -42,9 +42,9 @@ class VideoUrlToFramesNode:
                     "multiline": False,
                     "tooltip": "Video URL to extract frames from."
                 }),
-                "extraction_mode": (["auto", "num_frames", "extraction_fps"], {
+                "extraction_mode": (["auto", "num_frames", "fps_based"], {
                     "default": "auto",
-                    "tooltip": "Auto: Extract all frames at original FPS (recommended). num_frames: Extract specific number. extraction_fps: Extract at specific FPS."
+                    "tooltip": "Auto: Extract all frames at original FPS (recommended). num_frames: Extract specific number of frames. fps_based: Extract at specific FPS rate."
                 }),
             },
             "optional": {
@@ -60,7 +60,7 @@ class VideoUrlToFramesNode:
                     "min": 0.0,
                     "max": 60.0,
                     "step": 0.1,
-                    "tooltip": "Extract at specific FPS. Only used when extraction_mode is 'extraction_fps'. Set to 0.0 to extract all frames."
+                    "tooltip": "Extract at specific FPS. Only used when extraction_mode is 'fps_based'. Example: 24.0 = extract at 24 FPS."
                 }),
             }
         }
@@ -77,9 +77,9 @@ class VideoUrlToFramesNode:
         
         Args:
             video_url: URL to the video file
-            extraction_mode: "auto" (extract all at original FPS), "num_frames" (extract X frames), or "extraction_fps" (extract at specific FPS)
+            extraction_mode: "auto" (extract all at original FPS), "num_frames" (extract X frames), or "fps_based" (extract at specific FPS)
             num_frames: Number of frames to extract (only used when extraction_mode is "num_frames")
-            extraction_fps: Extract frames at specific FPS (only used when extraction_mode is "extraction_fps")
+            extraction_fps: Extract frames at specific FPS (only used when extraction_mode is "fps_based")
         
         Returns:
             tuple: (image_array, video_url) - Extracted frames as IMAGE tensor and original video URL
@@ -135,10 +135,10 @@ class VideoUrlToFramesNode:
                     except:
                         pass
                 
-            elif extraction_mode == "extraction_fps":
+            elif extraction_mode == "fps_based":
                 # FPS-based extraction
                 if extraction_fps <= 0:
-                    raise ValueError("extraction_fps must be > 0 when extraction_mode is 'extraction_fps'")
+                    raise ValueError("extraction_fps must be > 0 when extraction_mode is 'fps_based'")
                 
                 print(f"Extraction FPS: {extraction_fps}")
                 image_array, _ = VideoUrlUtils.video_url_to_frames(
