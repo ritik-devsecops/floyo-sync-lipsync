@@ -140,7 +140,7 @@ class FramesToVideoWithAudioNode:
     FUNCTION = "execute"
     CATEGORY = "Sync.so"
     OUTPUT_NODE = True
-    DESCRIPTION = "Create video from processed frames and merge with audio. Connect audio from LoadAudio or provide video_url."
+    DESCRIPTION = "Convert processed frames to video and merge with audio. NO upscaling - frames should be processed by other nodes first."
     
     def execute(self, images, fps=30.0, audio=None, video_url="", output_path=""):
         """
@@ -176,9 +176,20 @@ class FramesToVideoWithAudioNode:
                 print("Converting PyTorch tensor to numpy array...")
                 images = images.cpu().numpy()
             
-            batch_size, height, width, channels = images.shape
-            print(f"Frames: {batch_size}, Resolution: {width}x{height}")
+            # Get frame dimensions from first frame
+            # IMPORTANT: This node does NOT upscale - frames should be processed by other nodes
+            # We just use whatever dimensions the frames have (from upscale nodes, etc.)
+            first_frame = images[0]
+            if hasattr(first_frame, 'cpu'):
+                first_frame = first_frame.cpu().numpy()
+            
+            # Get dimensions from actual frame data (frames may be upscaled by other nodes)
+            actual_height, actual_width = first_frame.shape[0], first_frame.shape[1]
+            batch_size = len(images)
+            
+            print(f"Frames: {batch_size}, Resolution: {actual_width}x{actual_height}")
             print(f"Target FPS: {fps}")
+            print(f"Note: Using frame dimensions as-is (NO upscaling in this node)")
             
             # Determine output path
             if output_path and output_path.strip():
@@ -197,26 +208,28 @@ class FramesToVideoWithAudioNode:
             output_video_path = os.path.join(save_dir, f"processed_video_{timestamp}.mp4")
             
             # Convert frames to video
+            # IMPORTANT: This node does NOT do any upscaling or processing
+            # It only converts frames to video - frames should be processed by other nodes (upscale, filters, etc.)
             print(f"\nCreating video from frames...")
-            print(f"  Video dimensions: {width}x{height}")
+            print(f"  Video dimensions: {actual_width}x{actual_height}")
             print(f"  FPS: {fps}")
             print(f"  Total frames: {batch_size}")
             
             # For large resolutions (> 1920x1080), use FFmpeg instead of OpenCV VideoWriter
             # OpenCV VideoWriter has limitations with very large resolutions
             max_opencv_resolution = 1920 * 1080 * 2  # 2x 1080p
-            current_resolution = width * height
+            current_resolution = actual_width * actual_height
             
             if current_resolution > max_opencv_resolution:
-                print(f"  → Large resolution detected ({width}x{height}), using FFmpeg for better compatibility...")
+                print(f"  → Large resolution detected ({actual_width}x{actual_height}), using FFmpeg for better compatibility...")
                 try:
-                    output_video_path = self._create_video_with_ffmpeg(images, width, height, fps, output_video_path, batch_size)
+                    output_video_path = self._create_video_with_ffmpeg(images, actual_width, actual_height, fps, output_video_path, batch_size)
                 except FileNotFoundError:
                     print(f"  ⚠ Warning: FFmpeg not found, falling back to OpenCV (may fail for large resolutions)...")
-                    output_video_path = self._create_video_with_opencv(images, width, height, fps, output_video_path, batch_size)
+                    output_video_path = self._create_video_with_opencv(images, actual_width, actual_height, fps, output_video_path, batch_size)
             else:
                 # Use OpenCV VideoWriter for smaller resolutions
-                output_video_path = self._create_video_with_opencv(images, width, height, fps, output_video_path, batch_size)
+                output_video_path = self._create_video_with_opencv(images, actual_width, actual_height, fps, output_video_path, batch_size)
             
             # Verify video file was created and has content
             if not os.path.exists(output_video_path):
@@ -328,9 +341,17 @@ class FramesToVideoWithAudioNode:
                 print(f"  ⚠ Warning: Frame {i} has unexpected shape: {frame.shape}, skipping...")
                 continue
             
-            # Ensure frame matches expected dimensions
-            if frame.shape[0] != height or frame.shape[1] != width:
-                frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_LINEAR)
+            # Use frame as-is - NO resizing, NO upscaling, NO processing
+            # Frames should all be same size (from same IMAGE batch)
+            # This node only converts frames to video - all processing done by other nodes
+            frame_height, frame_width = frame.shape[0], frame.shape[1]
+            
+            # Verify frame dimensions match (frames from same batch should be identical)
+            if frame_height != height or frame_width != width:
+                raise Exception(
+                    f"Frame {i} size mismatch: {frame_width}x{frame_height} vs expected {width}x{height}. "
+                    f"All frames must be same size. Check your image processing nodes."
+                )
             
             # Convert from float (0-1) to uint8 (0-255)
             if frame.dtype != np.uint8:
@@ -382,10 +403,16 @@ class FramesToVideoWithAudioNode:
                 if len(frame.shape) != 3 or frame.shape[2] != 3:
                     continue
                 
-                # Ensure frame matches expected dimensions
-                if frame.shape[0] != height or frame.shape[1] != width:
-                    import cv2
-                    frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_LINEAR)
+                # Use frame as-is - NO resizing, NO upscaling, NO processing
+                # Frames should all be same size (from same IMAGE batch)
+                frame_height, frame_width = frame.shape[0], frame.shape[1]
+                
+                # Verify frame dimensions match (frames from same batch should be identical)
+                if frame_height != height or frame_width != width:
+                    raise Exception(
+                        f"Frame {i} size mismatch: {frame_width}x{frame_height} vs expected {width}x{height}. "
+                        f"All frames must be same size. Check your image processing nodes."
+                    )
                 
                 # Convert from float (0-1) to uint8 (0-255)
                 if frame.dtype != np.uint8:
