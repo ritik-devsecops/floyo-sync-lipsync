@@ -304,8 +304,8 @@ class VideoUrlToFramesNode:
                 else:
                     print("No audio track found in video")
 
-        except Exception as e:
-                print(f"Error extracting frames/audio: {str(e)}")
+            except Exception as e:
+                printprint(f"Error extracting frames/audio: {str(e)}")
                 frames_tensor = torch.zeros((1, 64, 64, 3), dtype=torch.float32)
                 frame_count = 0
                 video_fps = 0.0
