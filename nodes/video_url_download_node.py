@@ -4,8 +4,7 @@ Useful for saving the output from Sync.so Lipsync node
 """
 
 import os
-import requests
-from .video_url_utils import VideoUrlUtils
+from .sync_utils import SyncApiHandler
 
 
 class VideoUrlDownloadNode:
@@ -116,8 +115,8 @@ class VideoUrlDownloadNode:
             
             print(f"Downloading video to: {full_path}")
             
-            # Download video using VideoUrlUtils
-            downloaded_path = VideoUrlUtils.download_video_from_url(video_url, output_path=full_path)
+            # Download video using SyncApiHandler
+            downloaded_path = SyncApiHandler.download_file_from_url(video_url, suffix='.mp4', output_path=full_path)
             
             print("=" * 60)
             print(f"✓ Video downloaded successfully!")
